@@ -1,33 +1,31 @@
-
-#COMAND: docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t dngdev/cron-ticket:latest --push .
-
-#FROM --platform=arm64 node:19.2-alpine3.16
-#FROM --platform=$BUILDPLATFORM node:19.2-alpine3.16
-#FROM node:19.2-alpine3.16
-FROM node:19.2-alpine3.16
-
-# cd app
+# Stage 1: Install Dev Dependencies
+FROM node:19.2-alpine3.16 as deps
 WORKDIR /app
-
-# Source to /app
 COPY package.json ./
-
-# Install dependencies
 RUN npm install
 
-# Dest /app
-COPY . .
 
-# Perform testing
+
+# Stage 2: Verify App Stabiluty (tests)
+FROM node:19.2-alpine3.16 as builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 RUN npm run test
 
-# Delete unnecessary files and directories in PRODUCTION
-RUN rm -rf tests && rm -rf node_modules
 
-# Install dependencies only for production
+# Stage 3: Install Production Dependencies
+FROM node:19.2-alpine3.16 as prod-deps
+WORKDIR /app
+COPY package.json ./
 RUN npm install --prod
 
 
-# Comando que se ejecuta cuando se hace el run de la app
+# Stage 4: App Runner
+FROM node:19.2-alpine3.16 as runner
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY app.js ./
+COPY tasks/ ./tasks
 CMD [ "node", "app.js" ]
 
